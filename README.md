@@ -29,6 +29,12 @@ Or from a clone: `./install.sh`
 **Windows (PowerShell)**
 
 ```powershell
+irm https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main/install.ps1 | iex
+```
+
+Or from a clone:
+
+```powershell
 .\install.ps1
 ```
 
