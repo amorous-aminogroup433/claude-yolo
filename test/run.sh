@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+root=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 temporary=$(mktemp -d)
 trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 

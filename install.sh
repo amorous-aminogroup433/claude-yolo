@@ -13,7 +13,7 @@ case "${1:-}" in
     *) usage; exit 2 ;;
 esac
 
-source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+source_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 wrapper_source=$source_dir/bin/claude
 
 original=$(command -v claude 2>/dev/null || true)
@@ -29,7 +29,7 @@ else
     cat > "$install_bin/claude" <<'WRAPPER'
 #!/usr/bin/env bash
 set -u
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 translated=()
 for argument in "$@"; do
     case "$argument" in

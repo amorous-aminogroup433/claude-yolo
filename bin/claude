@@ -2,7 +2,7 @@
 # Unofficial Claude CLI shim.  It only translates the exact --yolo argument.
 set -u
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 
 # Build a replacement argument list without invoking a shell for the prompt.
 translated=()

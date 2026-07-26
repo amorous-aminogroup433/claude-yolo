@@ -23,5 +23,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - shell: pwsh
+      # The test captures cmd.exe output; Windows PowerShell preserves that
+      # redirection behavior consistently across GitHub-hosted runners.
+      - shell: powershell
         run: ./test/windows.ps1
