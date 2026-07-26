@@ -39,4 +39,8 @@ if [ -z "${original:-}" ] || [ ! -x "$original" ]; then
     exit 127
 fi
 
+if [ "${#translated[@]}" -eq 0 ]; then
+    exec "$original"
+fi
+
 exec "$original" "${translated[@]}"

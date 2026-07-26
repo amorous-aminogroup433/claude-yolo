@@ -10,6 +10,12 @@ try {
     $stderr = Join-Path $temporary 'stderr'
     $stdout = Join-Path $temporary 'stdout'
     $wrapper = Join-Path $root 'bin\claude.cmd'
+
+    & $env:ComSpec /d /s /c "`"$wrapper`" 1>`"$stdout`" 2>`"$stderr`""
+    if ($LASTEXITCODE -ne 0) { throw "no-argument exit status failed: $LASTEXITCODE" }
+    if ((Get-Content -Raw $stdout).Trim() -ne 'stdout:') { throw 'no-argument stdout failed' }
+    if ((Get-Content -Raw $stderr).Trim() -ne 'stderr:') { throw 'no-argument stderr failed' }
+
     & $env:ComSpec /d /s /c "`"$wrapper`" --yolo `"fix this bug`" 1>`"$stdout`" 2>`"$stderr`""
     $actualStdout = (Get-Content -Raw $stdout).Trim()
     if ($actualStdout -ne 'stdout:--dangerously-skip-permissions "fix this bug"') { throw "stdout translation failed: [$actualStdout]" }
