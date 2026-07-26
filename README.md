@@ -21,7 +21,7 @@ Claude CLI must already be on your `PATH`.
 **macOS / Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/claude-yolo/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main/install.sh | sh
 ```
 
 Or from a clone: `./install.sh`
