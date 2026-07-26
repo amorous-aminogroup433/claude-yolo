@@ -26,10 +26,13 @@ curl -fsSL https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main/instal
 
 Or from a clone: `./install.sh`
 
-**Windows (PowerShell)**
+**Windows (PowerShell installer)**
+
+Open PowerShell as Administrator:
 
 ```powershell
-irm https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main/install.ps1 | iex
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+iwr -useb https://raw.githubusercontent.com/khanalsaroj/claude-yolo/refs/heads/main/install.ps1 | iex
 ```
 
 Or from a clone:
@@ -38,7 +41,7 @@ Or from a clone:
 .\install.ps1
 ```
 
-Open a new terminal after installation.
+Restart your terminal after installation.
 
 ## Use
 
