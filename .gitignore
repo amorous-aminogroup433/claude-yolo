@@ -1,0 +1,17 @@
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# IntelliJ IDEA / JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
