@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Unofficial Claude CLI shim.  It only translates the exact --yolo argument.
+set -u
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+
+# Build a replacement argument list without invoking a shell for the prompt.
+translated=()
+for argument in "$@"; do
+    case "$argument" in
+        --yolo) translated+=("--dangerously-skip-permissions") ;;
+        *) translated+=("$argument") ;;
+    esac
+done
+
+if [ -n "${CLAUDE_YOLO_ORIGINAL:-}" ]; then
+    original=$CLAUDE_YOLO_ORIGINAL
+elif [ -r "$script_dir/../original-path" ]; then
+    IFS= read -r original < "$script_dir/../original-path" || original=
+else
+    original=
+    old_ifs=$IFS
+    IFS=:
+    for directory in ${PATH:-}; do
+        [ -n "$directory" ] || directory=.
+        resolved_directory=$(CDPATH= cd -- "$directory" 2>/dev/null && pwd -P) || continue
+        [ "$resolved_directory" = "$script_dir" ] && continue
+        candidate=$resolved_directory/claude
+        if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+            original=$candidate
+            break
+        fi
+    done
+    IFS=$old_ifs
+fi
+
+if [ -z "${original:-}" ] || [ ! -x "$original" ]; then
+    echo "claude-yolo: could not find the original Claude executable" >&2
+    exit 127
+fi
+
+exec "$original" "${translated[@]}"
