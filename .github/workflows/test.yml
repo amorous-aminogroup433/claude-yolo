@@ -9,15 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: chmod +x bin/claude install.sh uninstall.sh test/run.sh
+      - run: chmod +x bin/claude install.sh uninstall.sh test/run.sh test/install.sh
       - run: ./test/run.sh
+      - run: ./test/install.sh
 
   macos-tests:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - run: chmod +x bin/claude install.sh uninstall.sh test/run.sh
+      - run: chmod +x bin/claude install.sh uninstall.sh test/run.sh test/install.sh
       - run: ./test/run.sh
+      - run: ./test/install.sh
 
   windows-tests:
     runs-on: windows-latest
@@ -27,3 +29,5 @@ jobs:
       # redirection behavior consistently across GitHub-hosted runners.
       - shell: powershell
         run: ./test/windows.ps1
+      - shell: powershell
+        run: ./test/windows-install.ps1

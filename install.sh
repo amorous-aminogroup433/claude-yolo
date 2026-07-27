@@ -15,6 +15,7 @@ esac
 
 source_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 wrapper_source=$source_dir/bin/claude
+repository_url=${CLAUDE_YOLO_REPO_URL:-https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main}
 
 original=$(command -v claude 2>/dev/null || true)
 [ -n "$original" ] || { echo "claude-yolo: Claude CLI was not found in PATH" >&2; exit 1; }
@@ -25,41 +26,21 @@ mkdir -p "$install_bin"
 if [ -f "$wrapper_source" ]; then
     cp "$wrapper_source" "$install_bin/claude"
 else
-    # Keep the curl | sh installation path self-contained.
-    cat > "$install_bin/claude" <<'WRAPPER'
-#!/usr/bin/env bash
-set -u
-script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
-translated=()
-for argument in "$@"; do
-    case "$argument" in
-        --yolo) translated+=("--dangerously-skip-permissions") ;;
-        *) translated+=("$argument") ;;
-    esac
-done
-if [ -n "${CLAUDE_YOLO_ORIGINAL:-}" ]; then
-    original=$CLAUDE_YOLO_ORIGINAL
-elif [ -r "$script_dir/../original-path" ]; then
-    IFS= read -r original < "$script_dir/../original-path" || original=
-else
-    original=
-    old_ifs=$IFS
-    IFS=:
-    for directory in ${PATH:-}; do
-        [ -n "$directory" ] || directory=.
-        resolved_directory=$(CDPATH= cd -- "$directory" 2>/dev/null && pwd -P) || continue
-        [ "$resolved_directory" = "$script_dir" ] && continue
-        candidate=$resolved_directory/claude
-        if [ -f "$candidate" ] && [ -x "$candidate" ]; then original=$candidate; break; fi
-    done
-    IFS=$old_ifs
-fi
-if [ -z "${original:-}" ] || [ ! -x "$original" ]; then
-    echo "claude-yolo: could not find the original Claude executable" >&2
-    exit 127
-fi
-exec "$original" "${translated[@]}"
-WRAPPER
+    # curl | sh path: only this installer is present, so fetch the single
+    # source-of-truth wrapper from the repository instead of embedding a copy.
+    wrapper_url=$repository_url/bin/claude
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$wrapper_url" -o "$install_bin/claude" \
+            || { echo "claude-yolo: failed to download the wrapper from $wrapper_url" >&2; exit 1; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$install_bin/claude" "$wrapper_url" \
+            || { echo "claude-yolo: failed to download the wrapper from $wrapper_url" >&2; exit 1; }
+    else
+        echo "claude-yolo: need curl or wget to download the wrapper" >&2
+        exit 1
+    fi
+    [ -s "$install_bin/claude" ] \
+        || { echo "claude-yolo: downloaded wrapper is empty" >&2; exit 1; }
 fi
 chmod 755 "$install_bin/claude"
 printf '%s\n' "$original" > "$install_root/original-path"
