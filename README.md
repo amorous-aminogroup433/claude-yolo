@@ -6,7 +6,7 @@
 
 <p>
   A PATH shim that rewrites <code>--yolo</code> to <code>--dangerously-skip-permissions</code>
-  and hands everything else to the real Claude CLI, untouched.<br/>
+  and hands everything else to the real <a href="https://claude.ai/">Claude</a> CLI, untouched.<br/>
   No patching, no dependencies, under a hundred lines of shell per platform.
 </p>
 
@@ -42,15 +42,15 @@ runs
 claude --dangerously-skip-permissions "fix this bug"
 ```
 
-That is the entire feature. `claude-yolo` puts a small `claude` script earlier on your `PATH`, swaps that one argument, then execs the real binary. It does not modify Claude, patch anything on disk, or sit between you and the process afterwards. Arguments, stdin, stdout, stderr, and the exit code all pass through as they were.
+That is the entire feature. `claude-yolo` puts a small `claude` script earlier on your `PATH`, swaps that one argument, then execs the real binary. It does not modify [Claude](https://claude.ai/), patch anything on disk, or sit between you and the process afterwards. Arguments, stdin, stdout, stderr, and the exit code all pass through as they were.
 
-> It is unofficial and not affiliated with Anthropic.
+> It is unofficial and not affiliated with [Anthropic](https://www.anthropic.com/).
 
 ---
 
 ## Install
 
-Claude CLI has to already be on your `PATH`. The installer records where it found it.
+The [Claude](https://claude.ai/) CLI has to already be on your `PATH`. The installer records where it found it.
 
 **macOS and Linux**
 
