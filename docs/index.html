@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-yolo</title>
+<meta name="description" content="A PATH shim that rewrites --yolo to --dangerously-skip-permissions and hands everything else to the real Claude CLI, untouched.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="claude-yolo">
+<meta property="og:description" content="Six characters instead of thirty. A PATH shim for the Claude CLI.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://khanalsaroj.github.io/claude-yolo/">
+<link rel="canonical" href="https://khanalsaroj.github.io/claude-yolo/">
+
+<style>
+/* ---------------------------------------------------------------
+   Tokens. One accent (burnt orange), one radius scale (10px / 6px
+   for small chips), one theme family that swaps under
+   prefers-color-scheme. No section inverts.
+   Type: system stacks only. No external font request, so the page
+   is a single file with zero network dependencies, same as the
+   tool it documents.
+------------------------------------------------------------------ */
+:root {
+  --bg:          #fbfaf8;
+  --surface:     #ffffff;
+  --surface-2:   #f4f2ef;
+  --text:        #1c1b18;
+  --text-muted:  #5e5b54;
+  --text-faint:  #85817a;
+  --border:      #e4e1db;
+  --border-soft: #eeece7;
+  --accent:      #b8451f;
+  --accent-ink:  #ffffff;
+  --accent-wash: #fbeee8;
+  --shadow:      0 1px 2px rgba(28, 27, 24, .04), 0 12px 32px rgba(28, 27, 24, .06);
+
+  --r:    10px;
+  --r-sm: 6px;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --gutter: clamp(1.25rem, 5vw, 3rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:          #101010;
+    --surface:     #171716;
+    --surface-2:   #1d1d1b;
+    --text:        #ecebe6;
+    --text-muted:  #a09c94;
+    --text-faint:  #7e7a72;
+    --border:      #2c2b28;
+    --border-soft: #232320;
+    --accent:      #e8763f;
+    --accent-ink:  #17110c;
+    --accent-wash: #241812;
+    --shadow:      0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .34);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; }
+
+h1, h2, h3 { margin: 0; font-weight: 640; letter-spacing: -.022em; line-height: 1.12; }
+p  { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--accent); color: var(--accent-ink);
+  padding: .7rem 1.1rem; border-radius: 0 0 var(--r) 0; font-size: .9rem; font-weight: 600;
+}
+.skip:focus { left: 0; }
+
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; padding-inline: var(--gutter); }
+
+/* --- Navigation. Single line at desktop, 64px tall. ------------- */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  height: 64px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border-soft);
+}
+@supports not (backdrop-filter: blur(2px)) { .nav { background: var(--bg); } }
+
+.nav-in { height: 100%; display: flex; align-items: center; gap: 1.5rem; }
+.brand {
+  font-family: var(--mono); font-size: .95rem; font-weight: 600;
+  letter-spacing: -.02em; text-decoration: none; margin-right: auto; white-space: nowrap;
+}
+.brand b { color: var(--accent); font-weight: 600; }
+
+.nav-links { display: flex; align-items: center; gap: 1.65rem; }
+.nav-links a {
+  font-size: .875rem; color: var(--text-muted); text-decoration: none;
+  white-space: nowrap; transition: color .18s var(--ease);
+}
+.nav-links a:hover { color: var(--text); }
+@media (max-width: 860px) { .nav-links { display: none; } }
+
+/* --- Buttons. One radius, verified contrast, no wrapping. ------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 44px; padding-inline: 1.15rem;
+  border-radius: var(--r); border: 1px solid transparent;
+  font-family: var(--sans); font-size: .9rem; font-weight: 600;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: transform .12s var(--ease), background-color .18s var(--ease), border-color .18s var(--ease);
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text)); }
+.btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-ghost:hover { border-color: var(--text-faint); }
+.btn-sm { height: 36px; padding-inline: .9rem; font-size: .82rem; }
+
+/* --- Code blocks. Real command text, no fake window chrome. ----- */
+.code {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-family: var(--mono);
+  font-size: .855rem;
+  line-height: 1.75;
+  overflow: hidden;
+}
+.code pre {
+  margin: 0; padding: 1rem 3.4rem 1rem 1.1rem;
+  overflow-x: auto; white-space: pre;
+  scrollbar-width: thin;
+}
+.code .cm { color: var(--text-faint); }
+.code .fl { color: var(--accent); }
+.code .pr { color: var(--text-faint); user-select: none; }
+
+.copy {
+  position: absolute; top: 8px; right: 8px;
+  height: 28px; padding-inline: .55rem;
+  display: inline-flex; align-items: center;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  font-family: var(--sans); font-size: .72rem; font-weight: 600; letter-spacing: .01em;
+  cursor: pointer; opacity: 0;
+  transition: opacity .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .12s var(--ease);
+}
+.code:hover .copy, .copy:focus-visible { opacity: 1; }
+.copy:hover { color: var(--text); border-color: var(--text-faint); }
+.copy:active { transform: translateY(1px); }
+.copy[data-state="done"] { color: var(--accent); border-color: var(--accent); opacity: 1; }
+.copy[data-state="fail"] { color: var(--text); border-color: var(--text); opacity: 1; }
+@media (hover: none) { .copy { opacity: 1; } }
+
+/* --- Section rhythm ------------------------------------------- */
+section { padding-block: clamp(3.5rem, 8vw, 6.5rem); }
+.rule { border-top: 1px solid var(--border-soft); }
+
+.head { max-width: 42rem; margin-bottom: 2.75rem; }
+.head h2 { font-size: clamp(1.65rem, 3.4vw, 2.3rem); }
+.head p  { margin-top: .85rem; color: var(--text-muted); font-size: 1.02rem; max-width: 60ch; }
+
+/* --- Hero. Asymmetric split, 4 text elements max. -------------- */
+.hero { padding-top: clamp(2.75rem, 7vw, 5.5rem); padding-bottom: clamp(3rem, 7vw, 5rem); }
+.hero-grid {
+  display: grid; gap: clamp(2.25rem, 5vw, 4rem);
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+@media (min-width: 900px) { .hero-grid { grid-template-columns: 1.05fr .95fr; } }
+
+.hero h1 {
+  font-size: clamp(2.35rem, 6.2vw, 3.9rem);
+  letter-spacing: -.035em;
+  line-height: 1.04;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+.hero p {
+  margin-top: 1.25rem; max-width: 34rem;
+  font-size: clamp(1.02rem, 1.5vw, 1.12rem);
+  color: var(--text-muted);
+}
+.hero p code {
+  font-family: var(--mono); font-size: .9em;
+  color: var(--text); background: var(--surface-2);
+  padding: .1em .38em; border-radius: var(--r-sm);
+  border: 1px solid var(--border-soft);
+}
+.hero-cta { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+
+.swap { display: grid; gap: .55rem; }
+.swap-label {
+  font-family: var(--mono); font-size: .74rem; color: var(--text-faint);
+  padding-left: .15rem;
+}
+.swap-arrow {
+  font-family: var(--mono); font-size: .95rem; color: var(--accent);
+  padding-left: .15rem; line-height: 1;
+}
+
+/* --- Translation table ---------------------------------------- */
+.tbl-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+thead th {
+  text-align: left; padding: .85rem 1.1rem;
+  font-family: var(--sans); font-size: .75rem; font-weight: 640;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint);
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody td {
+  padding: .8rem 1.1rem; font-family: var(--mono); font-size: .82rem;
+  border-bottom: 1px solid var(--border-soft); vertical-align: top; white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--surface-2); }
+td .fl { color: var(--accent); }
+td .no { color: var(--text-faint); font-family: var(--sans); font-size: .78rem; white-space: normal; }
+
+/* --- Install. Two OS panels. ---------------------------------- */
+.os { display: grid; gap: 1.75rem; grid-template-columns: 1fr; }
+@media (min-width: 880px) { .os { grid-template-columns: 1fr 1fr; } }
+.os h3 { font-size: 1.02rem; margin-bottom: .3rem; }
+.os .os-note { font-size: .875rem; color: var(--text-muted); margin-bottom: .9rem; }
+.os .code + .os-after { margin-top: .8rem; font-size: .84rem; color: var(--text-faint); }
+.os .os-after code { font-family: var(--mono); color: var(--text-muted); }
+
+/* --- Discovery chain. Numbered vertical stack. ----------------- */
+.chain { display: grid; gap: 0; max-width: 54rem; }
+.chain li {
+  display: grid; gap: .35rem 1.35rem;
+  grid-template-columns: auto 1fr;
+  padding-block: 1.5rem;
+  border-top: 1px solid var(--border-soft);
+}
+.chain li:last-child { border-bottom: 1px solid var(--border-soft); }
+.chain .n {
+  grid-row: span 2;
+  font-family: var(--mono); font-size: .8rem; font-weight: 600;
+  color: var(--accent); padding-top: .28rem;
+}
+.chain h3 { font-family: var(--mono); font-size: .95rem; font-weight: 600; letter-spacing: -.01em; }
+.chain p { color: var(--text-muted); font-size: .935rem; max-width: 58ch; }
+@media (max-width: 560px) {
+  .chain li { grid-template-columns: 1fr; }
+  .chain .n { grid-row: auto; }
+}
+
+.fallout {
+  margin-top: 1.75rem; padding: 1rem 1.15rem;
+  background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: var(--r);
+  font-size: .9rem; color: var(--text); max-width: 54rem;
+}
+.fallout code { font-family: var(--mono); font-size: .88em; color: var(--accent); }
+
+/* --- Config. Key/value grid. ---------------------------------- */
+.vars { display: grid; gap: 1px; background: var(--border-soft); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.var {
+  display: grid; gap: .3rem 1.5rem; grid-template-columns: 1fr;
+  padding: 1.15rem 1.25rem; background: var(--surface);
+}
+@media (min-width: 800px) { .var { grid-template-columns: 19rem 1fr; align-items: baseline; } }
+.var dt { font-family: var(--mono); font-size: .84rem; font-weight: 600; color: var(--accent); }
+.var dd { margin: 0; font-size: .91rem; color: var(--text-muted); }
+.var dd b { color: var(--text); font-weight: 600; }
+.var dd .def { display: block; margin-top: .3rem; font-family: var(--mono); font-size: .78rem; color: var(--text-faint); }
+
+/* --- Development. Code + aside. ------------------------------- */
+.dev { display: grid; gap: 2rem; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 940px) { .dev { grid-template-columns: 1.15fr .85fr; gap: 3.25rem; } }
+.dev-notes p { color: var(--text-muted); font-size: .935rem; }
+.dev-notes p + p { margin-top: 1rem; }
+.dev-notes code { font-family: var(--mono); font-size: .87em; color: var(--text); }
+.dev-stack { display: grid; gap: 1rem; }
+
+/* --- FAQ. Accordion. ------------------------------------------ */
+.faq { max-width: 50rem; border-top: 1px solid var(--border-soft); }
+.faq details { border-bottom: 1px solid var(--border-soft); }
+.faq summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+  padding-block: 1.15rem; cursor: pointer; list-style: none;
+  font-size: 1rem; font-weight: 600; letter-spacing: -.012em;
+  transition: color .18s var(--ease);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary:hover { color: var(--accent); }
+.faq summary::after {
+  content: "+"; font-family: var(--mono); font-size: 1.15rem; font-weight: 400;
+  color: var(--text-faint); flex: none; transition: transform .2s var(--ease), color .18s var(--ease);
+}
+.faq details[open] summary::after { transform: rotate(45deg); color: var(--accent); }
+.faq details p { padding-bottom: 1.3rem; color: var(--text-muted); font-size: .935rem; max-width: 62ch; }
+.faq details p code { font-family: var(--mono); font-size: .88em; color: var(--text); }
+
+/* --- Closing band + footer ------------------------------------ */
+.close { text-align: left; }
+.close h2 { font-size: clamp(1.7rem, 3.6vw, 2.4rem); max-width: 20ch; }
+.close p { margin-top: .9rem; color: var(--text-muted); max-width: 48ch; }
+.close .hero-cta { margin-top: 1.85rem; }
+
+footer { border-top: 1px solid var(--border-soft); padding-block: 2.5rem 3rem; }
+.foot {
+  display: flex; flex-wrap: wrap; gap: 1rem 2rem;
+  align-items: baseline; justify-content: space-between;
+  font-size: .85rem; color: var(--text-faint);
+}
+.foot a { color: var(--text-muted); text-decoration: none; }
+.foot a:hover { color: var(--accent); }
+.foot-links { display: flex; flex-wrap: wrap; gap: 1.35rem; }
+.foot-note { max-width: 46ch; line-height: 1.6; }
+
+/* --- Motion. Entry + scroll reveal, both reduced-motion gated. -- */
+@media (prefers-reduced-motion: no-preference) {
+  .lift { opacity: 0; transform: translateY(14px); }
+  .lift.in { opacity: 1; transform: none; transition: opacity .65s var(--ease), transform .65s var(--ease); }
+  .hero .lift { animation: rise .8s var(--ease) both; opacity: 1; transform: none; }
+  .hero .lift:nth-child(1) { animation-delay: .04s; }
+  .hero .lift:nth-child(2) { animation-delay: .12s; }
+  .hero .lift:nth-child(3) { animation-delay: .2s; }
+  .hero-visual { animation: rise .9s var(--ease) .16s both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+}
+</style>
+</head>
+
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">claude<b>-yolo</b></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#translate">What it does</a>
+      <a href="#how">How it works</a>
+      <a href="#config">Config</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/khanalsaroj/claude-yolo">GitHub</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="#install">Install</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- HERO: asymmetric split. Left = message, right = the actual swap. -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <h1 class="lift">Six characters<br>instead of <em>thirty</em>.</h1>
+      <p class="lift">
+        A shim on your <code>PATH</code> rewrites <code>--yolo</code> to
+        <code>--dangerously-skip-permissions</code>, then execs the real CLI. Nothing else changes.
+      </p>
+      <div class="hero-cta lift">
+        <a class="btn btn-primary" href="#install">Install</a>
+        <a class="btn btn-ghost" href="https://github.com/khanalsaroj/claude-yolo">GitHub</a>
+      </div>
+    </div>
+
+    <div class="hero-visual swap">
+      <div class="swap-label">you type</div>
+      <div class="code">
+        <button class="copy" type="button" data-copy>Copy</button>
+<pre><span class="pr">$</span> claude <span class="fl">--yolo</span> "fix this bug"</pre>
+      </div>
+      <div class="swap-arrow" aria-hidden="true">&#8595;</div>
+      <div class="swap-label">Claude receives</div>
+      <div class="code">
+<pre><span class="pr">$</span> claude <span class="fl">--dangerously-skip-permissions</span> "fix this bug"</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRANSLATION: data table. -->
+<section class="rule" id="translate">
+  <div class="wrap">
+    <div class="head lift">
+      <h2>One argument, matched exactly</h2>
+      <p>
+        The wrapper walks the argument vector rather than the command line as a string, so nothing is
+        parsed, guessed at, or rewritten by pattern.
+      </p>
+    </div>
+
+    <div class="tbl-scroll lift">
+      <table>
+        <thead>
+          <tr><th scope="col">You type</th><th scope="col">Claude receives</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>claude <span class="fl">--yolo</span></td>
+            <td>claude <span class="fl">--dangerously-skip-permissions</span></td>
+          </tr>
+          <tr>
+            <td>claude <span class="fl">--yolo</span> "fix this bug"</td>
+            <td>claude <span class="fl">--dangerously-skip-permissions</span> "fix this bug"</td>
+          </tr>
+          <tr>
+            <td>claude chat <span class="fl">--yolo</span> --print</td>
+            <td>claude chat <span class="fl">--dangerously-skip-permissions</span> --print</td>
+          </tr>
+          <tr>
+            <td>claude --yolo=true</td>
+            <td>claude --yolo=true <span class="no">untouched</span></td>
+          </tr>
+          <tr>
+            <td>claude --some-flag --yolo</td>
+            <td>claude --some-flag --yolo <span class="no">untouched as a value</span></td>
+          </tr>
+          <tr>
+            <td>claude update</td>
+            <td>claude update</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL: two OS panels. -->
+<section class="rule" id="install">
+  <div class="wrap">
+    <div class="head lift">
+      <h2>Install</h2>
+      <p>
+        The <a href="https://claude.ai/">Claude</a> CLI has to already be on your <code>PATH</code>.
+        The installer records where it found it.
+      </p>
+    </div>
+
+    <div class="os lift">
+      <div>
+        <h3>macOS and Linux</h3>
+        <p class="os-note">Wrapper lands in <code>~/.claude-yolo/bin</code>, PATH line appended to your shell profile.</p>
+        <div class="code">
+          <button class="copy" type="button" data-copy>Copy</button>
+<pre>curl -fsSL https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main/install.sh | sh</pre>
+        </div>
+        <p class="os-after">
+          From a clone, run <code>./install.sh</code>. Pass <code>--no-profile</code> to skip the profile edit.
+          Remove it all with <code>./uninstall.sh</code>.
+        </p>
+      </div>
+
+      <div>
+        <h3>Windows</h3>
+        <p class="os-note">Wrapper lands in <code>%USERPROFILE%\.claude-yolo\bin</code>, prepended to your user Path.</p>
+        <div class="code">
+          <button class="copy" type="button" data-copy>Copy</button>
+<pre>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+iwr -useb https://raw.githubusercontent.com/khanalsaroj/claude-yolo/main/install.ps1 | iex</pre>
+        </div>
+        <p class="os-after">
+          From a clone, run <code>.\install.ps1</code>. Skip the PATH edit with <code>-NoPath</code>.
+          Remove it all with <code>.\uninstall.ps1</code>.
+        </p>
+      </div>
+    </div>
+
+    <p class="os-after lift" style="margin-top:1.75rem;max-width:60ch;">
+      Open a new terminal afterwards so the updated <code>PATH</code> takes effect.
+    </p>
+  </div>
+</section>
+
+<!-- HOW IT WORKS: numbered vertical chain. -->
+<section class="rule" id="how">
+  <div class="wrap">
+    <div class="head lift">
+      <h2>Finding the real executable</h2>
+      <p>
+        This is the only part with any logic to it. Both wrappers try the same three things in the same order.
+      </p>
+    </div>
+
+    <ol class="chain lift">
+      <li>
+        <span class="n">01</span>
+        <h3>CLAUDE_YOLO_ORIGINAL, if set</h3>
+        <p>
+          Authoritative. A wrong value fails rather than quietly falling back to something else, which is
+          what makes the test suite trustworthy.
+        </p>
+      </li>
+      <li>
+        <span class="n">02</span>
+        <h3>the cached original-path file</h3>
+        <p>
+          Written next to <code>bin/</code> at install time, holding wherever the installer found Claude.
+        </p>
+      </li>
+      <li>
+        <span class="n">03</span>
+        <h3>a PATH scan, skipping its own directory</h3>
+        <p>
+          The self-heal case. Reinstall Claude somewhere else and the cached path goes stale, so the wrapper
+          rediscovers it instead of breaking.
+        </p>
+      </li>
+    </ol>
+
+    <p class="fallout lift">
+      If none of those produce an executable file, the wrapper prints one line to stderr and exits
+      <code>127</code>, the conventional code for a command that was not found.
+    </p>
+  </div>
+</section>
+
+<!-- CONFIG: key/value grid. -->
+<section class="rule" id="config">
+  <div class="wrap">
+    <div class="head lift">
+      <h2>Environment variables</h2>
+      <p>Four of them. Two exist mainly so the tests never touch a real install.</p>
+    </div>
+
+    <dl class="vars lift">
+      <div class="var">
+        <dt>CLAUDE_YOLO_ORIGINAL</dt>
+        <dd>
+          Forces the path to the real Claude. <b>Authoritative, no fallback.</b>
+          <span class="def">default: unset</span>
+        </dd>
+      </div>
+      <div class="var">
+        <dt>CLAUDE_YOLO_HOME</dt>
+        <dd>
+          Install root for the wrapper and its cached path file.
+          <span class="def">default: ~/.claude-yolo or %USERPROFILE%\.claude-yolo</span>
+        </dd>
+      </div>
+      <div class="var">
+        <dt>CLAUDE_YOLO_PROFILE</dt>
+        <dd>
+          Which shell profile the POSIX installer edits.
+          <span class="def">default: picked from $SHELL (.zshrc, .bashrc, .profile)</span>
+        </dd>
+      </div>
+      <div class="var">
+        <dt>CLAUDE_YOLO_REPO_URL</dt>
+        <dd>
+          Where installers fetch wrappers from when they are not run from a clone.
+          <span class="def">default: the GitHub raw URL for main</span>
+        </dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<!-- DEVELOPMENT: code + aside. -->
+<section class="rule" id="dev">
+  <div class="wrap">
+    <div class="head lift">
+      <h2>Tests, and nothing else</h2>
+      <p>No build, no lint, no dependencies. The two platform wrappers are the whole product.</p>
+    </div>
+
+    <div class="dev lift">
+      <div class="dev-stack">
+        <div class="code">
+          <button class="copy" type="button" data-copy>Copy</button>
+<pre>sh test/run.sh      <span class="cm"># translation, stdio, exit codes</span>
+sh test/install.sh  <span class="cm"># installed artifact and self-heal</span></pre>
+        </div>
+        <div class="code">
+          <button class="copy" type="button" data-copy>Copy</button>
+<pre>./test/windows.ps1          <span class="cm"># Windows wrapper</span>
+./test/windows-install.ps1  <span class="cm"># installer, sandboxed</span></pre>
+        </div>
+      </div>
+
+      <div class="dev-notes">
+        <p>
+          No test ever touches a real Claude install. <code>CLAUDE_YOLO_ORIGINAL</code> points at a fake
+          <code>claude</code> that echoes its arguments to both streams and honours <code>FAKE_EXIT_CODE</code>.
+        </p>
+        <p>
+          Installs are sandboxed through <code>CLAUDE_YOLO_HOME</code> and <code>CLAUDE_YOLO_PROFILE</code>,
+          so your actual shell profile and user <code>PATH</code> are never written to.
+        </p>
+        <p>
+          There is no runner and no filtering. Each file is a flat sequence of assertions. CI runs the sh
+          tests on Linux and macOS, and the ps1 tests on Windows.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ: accordion. -->
+<section class="rule" id="faq">
+  <div class="wrap">
+    <div class="head lift">
+      <h2>Questions</h2>
+    </div>
+
+    <div class="faq lift">
+      <details>
+        <summary>Does this change my Claude installation?</summary>
+        <p>
+          No. Nothing is patched, wrapped, or overwritten. A second script named <code>claude</code> sits
+          earlier on your <code>PATH</code> and execs the real one.
+        </p>
+      </details>
+      <details>
+        <summary>What happens to my other flags?</summary>
+        <p>
+          They arrive exactly as you typed them, including quoting and spacing. Only a whole argument equal
+          to <code>--yolo</code> is replaced, and the match is case sensitive.
+        </p>
+      </details>
+      <details>
+        <summary>Do interactive sessions still work?</summary>
+        <p>
+          Yes. Standard input, output, and error are inherited rather than redirected, so the terminal UI,
+          colors, and prompts behave as if you had run <code>claude</code> directly.
+        </p>
+      </details>
+      <details>
+        <summary>What if I reinstall Claude somewhere else?</summary>
+        <p>
+          The wrapper notices the cached path no longer points at an executable and rescans <code>PATH</code>
+          for a <code>claude</code> outside its own directory. No reinstall required.
+        </p>
+      </details>
+      <details>
+        <summary>Is skipping permission prompts actually safe?</summary>
+        <p>
+          That is between you and your filesystem. The flag lets Claude act without asking first, and giving
+          it a shorter name does not make it less dangerous. Use it on a machine and in a directory you would
+          not mind Claude having free rein over.
+        </p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- CLOSING BAND -->
+<section class="rule">
+  <div class="wrap close lift">
+    <h2>Stop typing the long one.</h2>
+    <p>Two wrappers, under a hundred lines each, and no runtime beyond the shell you already have.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#install">Install</a>
+      <a class="btn btn-ghost" href="https://github.com/khanalsaroj/claude-yolo">GitHub</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <p class="foot-note">
+      Unofficial and not affiliated with <a href="https://www.anthropic.com/">Anthropic</a>.
+      <a href="https://claude.ai/">Claude</a> is their product. This is a shell script.
+    </p>
+    <div class="foot-links">
+      <a href="https://github.com/khanalsaroj/claude-yolo">Source</a>
+      <a href="https://github.com/khanalsaroj/claude-yolo/issues">Issues</a>
+      <a href="https://github.com/khanalsaroj/claude-yolo/blob/main/LICENSE">MIT</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Copy buttons. Success and failure both reported, with an aria-live region
+// so the state change is announced rather than only shown.
+(function () {
+  var live = document.createElement('div');
+  live.setAttribute('aria-live', 'polite');
+  live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap';
+  document.body.appendChild(live);
+
+  function flash(button, state, label) {
+    button.dataset.state = state;
+    button.textContent = label;
+    live.textContent = label;
+    clearTimeout(button._t);
+    button._t = setTimeout(function () {
+      delete button.dataset.state;
+      button.textContent = 'Copy';
+    }, 1800);
+  }
+
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var text = button.parentElement.querySelector('pre').innerText;
+      if (!navigator.clipboard) { flash(button, 'fail', 'Select it'); return; }
+      navigator.clipboard.writeText(text).then(
+        function () { flash(button, 'done', 'Copied'); },
+        function () { flash(button, 'fail', 'Select it'); }
+      );
+    });
+  });
+
+  // Scroll reveal. IntersectionObserver, never a scroll listener, and skipped
+  // entirely when the visitor asks for reduced motion.
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var targets = document.querySelectorAll('section:not(.hero) .lift');
+  if (still.matches || !('IntersectionObserver' in window)) {
+    targets.forEach(function (el) { el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('in');
+      io.unobserve(entry.target);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
+  targets.forEach(function (el) { io.observe(el); });
+})();
+</script>
+
+</body>
+</html>
