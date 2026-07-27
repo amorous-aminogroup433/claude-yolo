@@ -14,24 +14,31 @@ for argument in "$@"; do
 done
 
 if [ -n "${CLAUDE_YOLO_ORIGINAL:-}" ]; then
+    # An explicit override is authoritative: do not second-guess it.
     original=$CLAUDE_YOLO_ORIGINAL
-elif [ -r "$script_dir/../original-path" ]; then
-    IFS= read -r original < "$script_dir/../original-path" || original=
 else
     original=
-    old_ifs=$IFS
-    IFS=:
-    for directory in ${PATH:-}; do
-        [ -n "$directory" ] || directory=.
-        resolved_directory=$(CDPATH= cd -- "$directory" 2>/dev/null && pwd -P) || continue
-        [ "$resolved_directory" = "$script_dir" ] && continue
-        candidate=$resolved_directory/claude
-        if [ -f "$candidate" ] && [ -x "$candidate" ]; then
-            original=$candidate
-            break
-        fi
-    done
-    IFS=$old_ifs
+    if [ -r "$script_dir/../original-path" ]; then
+        IFS= read -r original < "$script_dir/../original-path" || original=
+    fi
+    # Self-heal: if the recorded path is stale (Claude moved or was reinstalled
+    # elsewhere), rediscover it from PATH instead of failing.
+    if [ -z "${original:-}" ] || [ ! -x "$original" ]; then
+        original=
+        old_ifs=$IFS
+        IFS=:
+        for directory in ${PATH:-}; do
+            [ -n "$directory" ] || directory=.
+            resolved_directory=$(CDPATH= cd -- "$directory" 2>/dev/null && pwd -P) || continue
+            [ "$resolved_directory" = "$script_dir" ] && continue
+            candidate=$resolved_directory/claude
+            if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+                original=$candidate
+                break
+            fi
+        done
+        IFS=$old_ifs
+    fi
 fi
 
 if [ -z "${original:-}" ] || [ ! -x "$original" ]; then

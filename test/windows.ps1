@@ -21,10 +21,19 @@ try {
     if ($actualStdout -ne 'stdout:--dangerously-skip-permissions "fix this bug"') { throw "stdout translation failed: [$actualStdout]" }
     if ((Get-Content -Raw $stderr).Trim() -ne 'stderr:--dangerously-skip-permissions "fix this bug"') { throw 'stderr propagation failed' }
 
+    # A cmd metacharacter with no surrounding spaces must survive the cmd.exe
+    # round-trip (regression guard for the & / | / < > handling).
+    & $env:ComSpec /d /s /c "`"$wrapper`" `"a&b`" 1>`"$stdout`" 2>`"$stderr`""
+    $actualStdout = (Get-Content -Raw $stdout).Trim()
+    if ($actualStdout -ne 'stdout:"a&b"') { throw "metacharacter handling failed: [$actualStdout]" }
+
     $env:FAKE_EXIT_CODE = '23'
     & $env:ComSpec /d /s /c "`"$wrapper`" --yolo >nul 2>nul"
     if ($LASTEXITCODE -ne 23) { throw "exit propagation failed: $LASTEXITCODE" }
     Write-Output 'Windows tests passed.'
+    # Do not leak the last subprocess's exit code; GitHub's powershell shell
+    # propagates $LASTEXITCODE and would otherwise fail the job.
+    exit 0
 }
 finally {
     Remove-Item Env:CLAUDE_YOLO_ORIGINAL -ErrorAction SilentlyContinue
