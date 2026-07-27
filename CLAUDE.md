@@ -49,6 +49,12 @@ The two platform wrappers are the product; installers/uninstallers are packaging
   3. else, **self-heal** by scanning PATH for `claude` (skipping the wrapper's own dir) —
      this also covers a stale cached path when Claude is reinstalled elsewhere.
 
+  A candidate that resolves into the wrapper's own directory is never accepted — the
+  wrapper would exec itself forever. A self-referencing cached path is treated as stale
+  (falls through to the PATH scan); a self-referencing `$CLAUDE_YOLO_ORIGINAL` exits 127.
+  The installers likewise skip the install bin when discovering the original, so a
+  re-install never records the shim itself in `original-path`.
+
 - **Windows stdio is inherited, never redirected.** `claude.ps1` launches via
   `ProcessStartInfo` with `UseShellExecute=$false` and no stream redirection. The
   `ProcessStartInfo` route (instead of the `&` call operator) is what stops PowerShell

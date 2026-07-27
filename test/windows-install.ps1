@@ -48,6 +48,23 @@ try {
         throw "self-heal failed: [$actual]"
     }
 
+    # Re-installing with the shim already first on PATH must keep recording
+    # the real Claude, never the shim itself.
+    $env:Path = "$installBin;$env:Path"
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'install.ps1') -NoPath | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "re-install exited $LASTEXITCODE" }
+    $recorded = (Get-Content -Raw (Join-Path $installHome 'original-path')).Trim()
+    if ($recorded -ne $fake) { throw "re-install: original-path is [$recorded], expected [$fake]" }
+
+    # A self-referencing original-path (broken install) must self-heal via the
+    # PATH scan rather than re-enter the wrapper forever.
+    Set-Content -NoNewline -Path (Join-Path $installHome 'original-path') -Value $wrapper
+    & $env:ComSpec /d /s /c "`"$wrapper`" --yolo 1>`"$stdout`""
+    $actual = (Get-Content -Raw $stdout).Trim()
+    if ($actual -ne 'stdout:--dangerously-skip-permissions') {
+        throw "self-reference heal failed: [$actual]"
+    }
+
     Write-Output 'Windows install tests passed.'
     exit 0
 }

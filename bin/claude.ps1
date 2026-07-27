@@ -11,6 +11,13 @@ $translated = foreach ($argument in $Arguments) {
     else { $argument }
 }
 
+# The wrapper's own directory contains nothing but the shim, so a candidate
+# that resolves into it would re-enter this script forever.
+function Test-PointsAtSelf([string] $path, [string] $scriptDirectory) {
+    try { $parent = [IO.Path]::GetFullPath((Split-Path -Parent $path)) } catch { return $false }
+    return $parent.TrimEnd('\') -ieq $scriptDirectory.TrimEnd('\')
+}
+
 function Find-OriginalOnPath([string] $scriptDirectory) {
     foreach ($directory in ($env:Path -split [IO.Path]::PathSeparator)) {
         if (-not $directory) { continue }
@@ -34,14 +41,17 @@ else {
     if (Test-Path -LiteralPath $originalPathFile) {
         $original = (Get-Content -Raw $originalPathFile).TrimEnd("`r", "`n")
     }
-    # Self-heal: if the recorded path is stale (Claude moved or was reinstalled
-    # elsewhere), rediscover it from PATH instead of failing.
-    if (-not $original -or -not (Test-Path -LiteralPath $original -PathType Leaf)) {
+    # Self-heal: if the recorded path is stale (Claude moved, was reinstalled
+    # elsewhere, or a broken install recorded the shim itself), rediscover it
+    # from PATH instead of failing.
+    if (-not $original -or -not (Test-Path -LiteralPath $original -PathType Leaf) -or
+            (Test-PointsAtSelf $original $scriptDirectory)) {
         $original = Find-OriginalOnPath $scriptDirectory
     }
 }
 
-if (-not $original -or -not (Test-Path -LiteralPath $original -PathType Leaf)) {
+if (-not $original -or -not (Test-Path -LiteralPath $original -PathType Leaf) -or
+        (Test-PointsAtSelf $original $scriptDirectory)) {
     [Console]::Error.WriteLine('claude-yolo: could not find the original Claude executable')
     exit 127
 }

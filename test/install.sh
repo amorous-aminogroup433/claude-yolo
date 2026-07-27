@@ -20,6 +20,9 @@ printf '\n'
 exit "${FAKE_EXIT_CODE:-0}"
 EOF
 chmod 755 "$realbin/claude"
+# The installer records symlink-resolved paths (mktemp on macOS lives behind
+# /var -> /private/var), so assert against the resolved spelling.
+realbin_resolved=$(CDPATH= cd "$realbin" && pwd -P)
 
 fail() { echo "install-test: $1" >&2; exit 1; }
 
@@ -43,13 +46,20 @@ home_a=$temporary/home-clone
 CLAUDE_YOLO_HOME="$home_a" PATH="$realbin:$PATH" sh "$root/install.sh" --no-profile >/dev/null
 
 [ -f "$home_a/bin/claude" ] || fail "clone: wrapper not installed"
-[ "$(cat "$home_a/original-path")" = "$realbin/claude" ] || fail "clone: original-path not recorded"
+[ "$(cat "$home_a/original-path")" = "$realbin_resolved/claude" ] || fail "clone: original-path not recorded"
 [ -x "$home_a/bin/claude" ] || fail "clone: installed wrapper not executable"
 
 check "$home_a" 'clone/bare'   'stdout:' 0
 check "$home_a" 'clone/yolo'   'stdout:<--dangerously-skip-permissions>' 0 --yolo
 check "$home_a" 'clone/prompt' 'stdout:<--dangerously-skip-permissions><fix this bug>' 0 --yolo 'fix this bug'
 check "$home_a" 'clone/passthrough' 'stdout:<update>' 0 update
+
+# Re-installing with the shim already first on PATH must not record the shim
+# itself as the original (that would make the wrapper exec itself forever).
+CLAUDE_YOLO_HOME="$home_a" PATH="$home_a/bin:$realbin:$PATH" sh "$root/install.sh" --no-profile >/dev/null
+[ "$(cat "$home_a/original-path")" = "$realbin_resolved/claude" ] \
+    || fail "reinstall: original-path is $(cat "$home_a/original-path")"
+check "$home_a" 'reinstall/yolo' 'stdout:<--dangerously-skip-permissions>' 0 --yolo
 
 # Exit-code propagation through the installed wrapper.
 set +e
@@ -64,6 +74,25 @@ CLAUDE_YOLO_ORIGINAL="$temporary/does-not-exist" "$home_a/bin/claude" --yolo >/d
 status=$?
 set -e
 [ "$status" -eq 127 ] || fail "missing original: got $status, expected 127"
+
+# CLAUDE_YOLO_ORIGINAL pointing back at the shim is a wrong explicit value:
+# it must fail with 127, not exec itself forever.
+set +e
+CLAUDE_YOLO_ORIGINAL="$home_a/bin/claude" "$home_a/bin/claude" --yolo >/dev/null 2>&1
+status=$?
+set -e
+[ "$status" -eq 127 ] || fail "self-referencing original: got $status, expected 127"
+
+# A self-referencing original-path (broken install) must self-heal via the
+# PATH scan rather than exec itself forever.
+printf '%s\n' "$home_a/bin/claude" > "$home_a/original-path"
+out=$temporary/out
+set +e
+( unset CLAUDE_YOLO_ORIGINAL; PATH="$realbin:$PATH" CLAUDE_YOLO_HOME="$home_a" "$home_a/bin/claude" --yolo ) >"$out" 2>/dev/null
+status=$?
+set -e
+[ "$status" -eq 0 ] || fail "self-reference heal: exit $status"
+[ "$(cat "$out")" = 'stdout:<--dangerously-skip-permissions>' ] || fail "self-reference heal: stdout [$(cat "$out")]"
 
 # Self-heal: a stale original-path falls back to PATH discovery.
 printf '%s\n' "$temporary/gone/claude" > "$home_a/original-path"

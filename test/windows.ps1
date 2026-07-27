@@ -30,6 +30,13 @@ try {
     $env:FAKE_EXIT_CODE = '23'
     & $env:ComSpec /d /s /c "`"$wrapper`" --yolo >nul 2>nul"
     if ($LASTEXITCODE -ne 23) { throw "exit propagation failed: $LASTEXITCODE" }
+
+    # CLAUDE_YOLO_ORIGINAL pointing back at the shim is a wrong explicit
+    # value: it must fail with 127, not re-enter the wrapper forever.
+    $env:CLAUDE_YOLO_ORIGINAL = $wrapper
+    & $env:ComSpec /d /s /c "`"$wrapper`" --yolo >nul 2>nul"
+    if ($LASTEXITCODE -ne 127) { throw "self-referencing original: $LASTEXITCODE, expected 127" }
+
     Write-Output 'Windows tests passed.'
     # Do not leak the last subprocess's exit code; GitHub's powershell shell
     # propagates $LASTEXITCODE and would otherwise fail the job.

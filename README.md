@@ -124,6 +124,8 @@ Finding the real executable is the only part with any logic to it, and both wrap
 2. **The cached `original-path` file**, written next to `bin/` at install time.
 3. **A `PATH` scan**, skipping the wrapper's own directory. This is the self-heal case: reinstall Claude somewhere else and the cached path goes stale, so the wrapper rediscovers it instead of breaking.
 
+A candidate that points back at the wrapper itself is never accepted, so the shim cannot exec itself in a loop: a self-referencing cached path is treated as stale and falls through to the `PATH` scan, and a self-referencing `CLAUDE_YOLO_ORIGINAL` fails with exit 127. The installers apply the same rule and skip their own install directory when discovering the original.
+
 If none of those produce an executable file, the wrapper prints one line to stderr and exits 127.
 
 <details>

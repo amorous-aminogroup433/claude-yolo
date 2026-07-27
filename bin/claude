@@ -1,17 +1,29 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Unofficial Claude CLI shim.  It only translates the exact --yolo argument.
 set -u
 
 script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 
-# Build a replacement argument list without invoking a shell for the prompt.
-translated=()
-for argument in "$@"; do
+# Rewrite the positional parameters in place: shift each argument off the
+# front and append its translation, so after one full rotation "$@" is the
+# translated list.  No arrays, so this runs under any POSIX sh.
+remaining=$#
+while [ "$remaining" -gt 0 ]; do
+    argument=$1
+    shift
     case "$argument" in
-        --yolo) translated+=("--dangerously-skip-permissions") ;;
-        *) translated+=("$argument") ;;
+        --yolo) set -- "$@" --dangerously-skip-permissions ;;
+        *) set -- "$@" "$argument" ;;
     esac
+    remaining=$((remaining - 1))
 done
+
+# The wrapper's own directory contains nothing but the shim, so a candidate
+# that resolves into it would exec this script again, forever.
+points_at_self() {
+    candidate_dir=$(CDPATH= cd -- "$(dirname -- "$1")" 2>/dev/null && pwd -P) || return 1
+    [ "$candidate_dir" = "$script_dir" ]
+}
 
 if [ -n "${CLAUDE_YOLO_ORIGINAL:-}" ]; then
     # An explicit override is authoritative: do not second-guess it.
@@ -21,9 +33,10 @@ else
     if [ -r "$script_dir/../original-path" ]; then
         IFS= read -r original < "$script_dir/../original-path" || original=
     fi
-    # Self-heal: if the recorded path is stale (Claude moved or was reinstalled
-    # elsewhere), rediscover it from PATH instead of failing.
-    if [ -z "${original:-}" ] || [ ! -x "$original" ]; then
+    # Self-heal: if the recorded path is stale (Claude moved, was reinstalled
+    # elsewhere, or a broken install recorded the shim itself), rediscover it
+    # from PATH instead of failing.
+    if [ -z "${original:-}" ] || [ ! -x "$original" ] || points_at_self "$original"; then
         original=
         old_ifs=$IFS
         IFS=:
@@ -41,13 +54,9 @@ else
     fi
 fi
 
-if [ -z "${original:-}" ] || [ ! -x "$original" ]; then
+if [ -z "${original:-}" ] || [ ! -x "$original" ] || points_at_self "$original"; then
     echo "claude-yolo: could not find the original Claude executable" >&2
     exit 127
 fi
 
-if [ "${#translated[@]}" -eq 0 ]; then
-    exec "$original"
-fi
-
-exec "$original" "${translated[@]}"
+exec "$original" "$@"
